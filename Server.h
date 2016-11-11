@@ -1,7 +1,14 @@
 #include "Os.h"
 #include <stdio.h>
-#include <winsock2.h>
 #include <string>
+
+#ifdef Windows
+	#include <winsock2.h>
+#else
+	#include<sys/socket.h>
+	#include<arpa/inet.h>
+#endif
+
 
 #pragma comment(lib,"ws2_32.lib")
 
@@ -45,7 +52,7 @@ struct Session{
 
 struct Client{
 
-	#ifdef windows
+	#ifdef Windows
 		SOCKET c_socket;
 	#else
 		int c_socket;
@@ -55,11 +62,18 @@ struct Client{
 	sockaddr_in inf;
 	Session c_session;
 
-	Client(SOCKET s,sockaddr_in i){
-		c_socket = s;
-		inf = i;
-		replyBuffer = "";
-	}
+
+	#ifdef Windows
+		Client(SOCKET s,sockaddr_in i)
+	#else
+		Client(int s,sockaddr_in i)
+	#endif
+		{
+			c_socket = s;
+			inf = i;
+			replyBuffer = "";
+		}
+
 	char* getIpAddress(){
 		return inet_ntoa(this->inf.sin_addr);
 	}
@@ -74,7 +88,7 @@ class Server{
 
 private:
 
-	#ifdef windows
+	#ifdef Windows
 		WSADATA wsa;
 		SOCKET server_s;
 		SOCKET client_s;
