@@ -1,6 +1,7 @@
 #include "Os.h"
 #include <stdio.h>
 #include <string>
+#include <ctime>
 
 #ifdef Windows
 	#include <winsock2.h>
@@ -53,26 +54,23 @@ struct Session{
 struct Client{
 
 	#ifdef Windows
-		SOCKET c_socket;
+		SOCKET c_socket_tcp;
+		SOCKET c_socket_udp;
 	#else
-		int c_socket;
+		int c_socket_tcp;
+		int c_socket_udp
 	#endif
 
 	std::string replyBuffer;
 	sockaddr_in inf;
 	Session c_session;
 
+	Client(){
 
-	#ifdef Windows
-		Client(SOCKET s,sockaddr_in i)
-	#else
-		Client(int s,sockaddr_in i)
-	#endif
-		{
-			c_socket = s;
-			inf = i;
-			replyBuffer = "";
-		}
+		c_socket_tcp = 0;
+		c_socket_udp = 0;
+		replyBuffer = "";
+	}
 
 	char* getIpAddress(){
 		return inet_ntoa(this->inf.sin_addr);
@@ -90,20 +88,29 @@ private:
 
 	#ifdef Windows
 		WSADATA wsa;
-		SOCKET server_s;
-		SOCKET client_s;
+		SOCKET server_s_tcp;
+		SOCKET server_s_udp;
 	#else
-		int server_s;
-		int client_s;
+		int server_s_tcp;
+		int server_s_udp;
 	#endif
 
 	int port;
+	std::string mode;
 	sockaddr_in server_inf;
-	sockaddr_in client_inf;
+
+	Client client;
 
 public:
 
-	Server(int);
+	
+	int commandHandling(char*);
+	int serverSetUp();
+	void acceptTcp();
+	void start(std::string);
+	std::string currentDateTime();
+
+	Server(int, std::string);
 	~Server();
 };
 
