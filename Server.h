@@ -102,6 +102,7 @@ private:
 	int udp_recv_size;
 	int tcp_send_size;
 	int udp_send_size;
+	bool is_connection;
 	std::string mode;
 	sockaddr_in server_inf;
 
@@ -117,6 +118,14 @@ public:
 	bool searchEscapeChars(char *, int);
 	std::string currentDateTime();
 	void commandDefaultRouting();
+
+	
+	void commandUnknow(char*);
+	void commandEcho();
+	void commandTime();
+	void commandClose();
+	void commandDownload();
+	void commandUpload();
 
 	Server(int, std::string);
 	~Server();

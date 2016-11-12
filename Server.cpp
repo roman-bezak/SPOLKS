@@ -5,6 +5,7 @@ Server::Server(int _port, std::string _mode){
 
 	this->mode = _mode;
 	this->port = _port;
+	this->is_connection = false;
 
 	this->server_inf.sin_family = AF_INET;
     this->server_inf.sin_addr.s_addr = INADDR_ANY;
@@ -70,12 +71,13 @@ void Server::acceptTcp(){
 		if((this->client.c_socket_tcp = accept(this->server_s_tcp, (struct sockaddr *)&this->client.inf, (socklen_t*)&addrLen)) < 0)
 			printf("Accept error");
 	#endif
+	
+	this->is_connection = true;
+	timeval tv;
+	tv.tv_sec  = 1;
+	tv.tv_usec = 0;
 
-	 timeval tv;
-	 tv.tv_sec  = 1;
-	 tv.tv_usec = 0;
-
-	 setsockopt(this->client.c_socket_tcp, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&tv), sizeof(timeval));
+	setsockopt(this->client.c_socket_tcp, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&tv), sizeof(timeval));
 
 }
 
@@ -92,14 +94,14 @@ void Server::start(){
 
 			this->acceptTcp();
 
-			while (true){
+			while (this->is_connection){
 				
 				bytes_recv = recv(this->client.c_socket_tcp,command_buf,256,0);
 
 				if(bytes_recv == -1){
-				
+
 				}else if(bytes_recv == 0){
-					
+
 				}else {
 
 					if(this->searchEscapeChars(command_buf,bytes_recv)){
@@ -205,21 +207,15 @@ void Server::commandDefaultRouting(){
 	switch (this->commandHandling(const_cast<char*>(this->client.replyBuffer.c_str()))){
 
 		case -1://Unknow command
-			send( this->client.c_socket_tcp , "Unknow command, try again" , strlen("Unknow command, try again") , 0 );
-			this->client.replyBuffer.clear();
+			this->commandUnknow("Unknow command, try again");
 			break;
 
 		case 0://ECHO
-		if(this->client.replyBuffer[strlen("ECHO")] == ' ')
-			this->client.replyBuffer.erase(this->clients[i].replyBuffer.begin(), this->clients[i].replyBuffer.begin() + strlen("ECHO")+1);
-		else this->clients[i].replyBuffer.clear();
-		send( this->clients[i].c_socket , this->clients[i].replyBuffer.c_str() , strlen(this->clients[i].replyBuffer.c_str()) , 0 );
-		this->clients[i].replyBuffer.clear();
-		break;
+			this->commandEcho();
+		    break;
 
 		case 1://TIME
-			send( this->client.c_socket_tcp , currentDateTime().c_str() , strlen(currentDateTime().c_str()) , 0 );
-			this->client.replyBuffer.clear();
+			this->commandTime();
 			break;
 			
 		//case 2://UPLOAD
@@ -228,7 +224,40 @@ void Server::commandDefaultRouting(){
 		//case 3://DOWNLOAD
 
 
-		//case 4://CLOSE
-
+		case 4://CLOSE
+			this->commandClose();
+			break;
 	}//switch
+}
+
+void Server::commandUnknow(char* message){
+	send( this->client.c_socket_tcp , message, strlen(message) , 0 );
+	this->client.replyBuffer.clear();
+}
+void Server::commandTime(){
+	send( this->client.c_socket_tcp , currentDateTime().c_str() , strlen(currentDateTime().c_str()) , 0 );
+	this->client.replyBuffer.clear();
+}
+void Server::commandEcho(){
+
+	if(this->client.replyBuffer[strlen("ECHO")] == ' ')
+		this->client.replyBuffer.erase(this->client.replyBuffer.begin(), this->client.replyBuffer.begin() + strlen("ECHO")+1);
+	else this->client.replyBuffer.clear();
+	send( this->client.c_socket_tcp , this->client.replyBuffer.c_str() , strlen(this->client.replyBuffer.c_str()) , 0 );
+	this->client.replyBuffer.clear();
+}
+void Server::commandClose(){
+	
+	this->client.c_session.clear();
+	this->client.replyBuffer.clear();
+
+	#ifdef Windows
+		closesocket(this->client.c_socket_tcp);
+	#else
+		close(this->client.c_socket_tcp);
+	#endif
+
+	this->is_connection = false;
+
+
 }
