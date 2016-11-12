@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string>
 #include <ctime>
+#include <iostream>
 
 #ifdef Windows
 	#include <winsock2.h>
@@ -96,6 +97,11 @@ private:
 	#endif
 
 	int port;
+	int command_buf_size;
+	int tcp_recv_size;
+	int udp_recv_size;
+	int tcp_send_size;
+	int udp_send_size;
 	std::string mode;
 	sockaddr_in server_inf;
 
@@ -107,8 +113,10 @@ public:
 	int commandHandling(char*);
 	int serverSetUp();
 	void acceptTcp();
-	void start(std::string);
+	void start();
+	bool searchEscapeChars(char *, int);
 	std::string currentDateTime();
+	void commandDefaultRouting();
 
 	Server(int, std::string);
 	~Server();

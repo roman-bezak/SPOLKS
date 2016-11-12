@@ -11,7 +11,6 @@ Server::Server(int _port, std::string _mode){
 	this->server_inf.sin_port = htons( this->port );
 
 	this->serverSetUp();
-	this->acceptTcp();
 
 }
 
@@ -82,24 +81,70 @@ void Server::acceptTcp(){
 
 
 
-//void Server::start(std::string _mode){
-//
-//	int addrLen = sizeof(struct sockaddr_in);
-//
-//	//while (true){
-//
-//	//	#ifdef Windows
-//	//		if ((this->client.c_socket_tcp = accept(this->server_s, (struct sockaddr *)&this->client_inf, (int *)&addrLen))<0)
-//	//			printf("Accept error");
-//	//	#else
-//	//		if((this->client.c_socket_tcp = accept(this->server_s, (struct sockaddr *)&this->client_inf, (socklen_t*)&addrLen)) < 0)
-//	//			printf("Accept error");
-//	//	#endif
-//
-//
-//
-//	//}//while
-//}
+void Server::start(){
+
+	char command_buf[256];
+	int bytes_recv = -1;
+
+	if(this->mode == "TCP"){
+		
+		while (true){
+
+			this->acceptTcp();
+
+			while (true){
+				
+				bytes_recv = recv(this->client.c_socket_tcp,command_buf,256,0);
+
+				if(bytes_recv == -1){
+				
+				}else if(bytes_recv == 0){
+					
+				}else {
+
+					if(this->searchEscapeChars(command_buf,bytes_recv)){
+						this->commandDefaultRouting();
+					}
+
+				}//else
+			}
+		}
+
+	}else if(this->mode == "UDP"){
+		//
+	}
+}
+
+bool Server::searchEscapeChars(char *command_buf, int bytes_recv){
+
+	char *command = (char*)malloc(strlen(command_buf));
+	strcpy(command,command_buf);
+	command[bytes_recv] = '\0';
+	std::string temp(command);
+	std::string sh_one("\r\n");
+	std::string sh_two("\n");
+	bool issetEndOfCommand = false;
+
+	std::size_t found = temp.find(sh_one);
+	if (found!=std::string::npos){
+		temp[found] = '\0';
+		this->client.replyBuffer.append(temp);
+		issetEndOfCommand = true;
+	}else{
+
+		found = temp.find(sh_two);
+		if (found!=std::string::npos){
+			temp[found] = '\0';
+			this->client.replyBuffer.append(temp);
+			issetEndOfCommand = true;
+		}else {
+			issetEndOfCommand = false;
+			this->client.replyBuffer.append(temp);
+		}				
+	}
+
+	return issetEndOfCommand;
+}
 
 int Server::serverSetUp(){
 	
@@ -153,4 +198,37 @@ int Server::serverSetUp(){
 	}
 
 	return 0;
+}
+
+void Server::commandDefaultRouting(){
+
+	switch (this->commandHandling(const_cast<char*>(this->client.replyBuffer.c_str()))){
+
+		case -1://Unknow command
+			send( this->client.c_socket_tcp , "Unknow command, try again" , strlen("Unknow command, try again") , 0 );
+			this->client.replyBuffer.clear();
+			break;
+
+		case 0://ECHO
+		if(this->client.replyBuffer[strlen("ECHO")] == ' ')
+			this->client.replyBuffer.erase(this->clients[i].replyBuffer.begin(), this->clients[i].replyBuffer.begin() + strlen("ECHO")+1);
+		else this->clients[i].replyBuffer.clear();
+		send( this->clients[i].c_socket , this->clients[i].replyBuffer.c_str() , strlen(this->clients[i].replyBuffer.c_str()) , 0 );
+		this->clients[i].replyBuffer.clear();
+		break;
+
+		case 1://TIME
+			send( this->client.c_socket_tcp , currentDateTime().c_str() , strlen(currentDateTime().c_str()) , 0 );
+			this->client.replyBuffer.clear();
+			break;
+			
+		//case 2://UPLOAD
+
+
+		//case 3://DOWNLOAD
+
+
+		//case 4://CLOSE
+
+	}//switch
 }
