@@ -1,12 +1,17 @@
 #include "Server.h"
 
+#define command_buf_size 256
+#define tcp_recv_size 1024
+#define udp_recv_size 1024
+#define tcp_send_size 1024
+#define udp_send_size 1024
 
 Server::Server(int _port, std::string _mode){
 
 	this->mode = _mode;
 	this->port = _port;
-	this->is_connection = false;
 
+	this->is_connection = false;
 	this->server_inf.sin_family = AF_INET;
     this->server_inf.sin_addr.s_addr = INADDR_ANY;
 	this->server_inf.sin_port = htons( this->port );
@@ -38,11 +43,11 @@ std::string Server::currentDateTime() {
 int Server::commandHandling(char* com){
 
 	char *m[] = {
-		"ECHO",
-		"TIME",
-		"UPLOAD",
-		"DOWNLOAD",
-		"CLOSE"
+		(char*)"ECHO",
+		(char*)"TIME",
+		(char*)"UPLOAD",
+		(char*)"DOWNLOAD",
+		(char*)"CLOSE"
 	};
 
 	char *command = (char*)malloc(strlen(com));
@@ -85,7 +90,7 @@ void Server::acceptTcp(){
 
 void Server::start(){
 
-	char command_buf[256];
+	char command_buf[command_buf_size];
 	int bytes_recv = -1;
 
 	if(this->mode == "TCP"){
@@ -96,7 +101,7 @@ void Server::start(){
 
 			while (this->is_connection){
 				
-				bytes_recv = recv(this->client.c_socket_tcp,command_buf,256,0);
+				bytes_recv = recv(this->client.c_socket_tcp,command_buf,command_buf_size,0);
 
 				if(bytes_recv == -1){
 
@@ -218,8 +223,9 @@ void Server::commandDefaultRouting(){
 			this->commandTime();
 			break;
 			
-		//case 2://UPLOAD
-
+		case 2://UPLOAD
+			this->commandUpload();
+			break;
 
 		//case 3://DOWNLOAD
 
@@ -259,5 +265,7 @@ void Server::commandClose(){
 
 	this->is_connection = false;
 
-
+}
+void Server::commandUpload(){
+	
 }
