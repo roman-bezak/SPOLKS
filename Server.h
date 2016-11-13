@@ -3,6 +3,9 @@
 #include <string>
 #include <ctime>
 #include <iostream>
+#include <vector>
+#include <sstream>
+#include <algorithm>
 
 #ifdef Windows
 	#include <winsock2.h>
@@ -121,7 +124,7 @@ public:
 	void commandClose();
 	void commandDownload();
 	void commandUpload();
-
+	void reciveFileProcessing();
 	Server(int, std::string);
 	~Server();
 };

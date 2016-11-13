@@ -42,6 +42,7 @@ std::string Server::currentDateTime() {
 
 int Server::commandHandling(char* com){
 
+
 	char *m[] = {
 		(char*)"ECHO",
 		(char*)"TIME",
@@ -96,17 +97,18 @@ void Server::start(){
 	if(this->mode == "TCP"){
 		
 		while (true){
-
+puts("0");
 			this->acceptTcp();
-
+					
 			while (this->is_connection){
 				
-				bytes_recv = recv(this->client.c_socket_tcp,command_buf,command_buf_size,0);
+				bytes_recv = recv(this->client.c_socket_tcp,command_buf,command_buf_size, 0);
 
 				if(bytes_recv == -1){
-
+							puts("1");
 				}else if(bytes_recv == 0){
-
+					puts("2");
+					//this->commandClose();
 				}else {
 
 					if(this->searchEscapeChars(command_buf,bytes_recv)){
@@ -122,11 +124,11 @@ void Server::start(){
 	}
 }
 
-bool Server::searchEscapeChars(char *command_buf, int bytes_recv){
-
+bool Server::searchEscapeChars(char *command_buf, int _bytes_recv){
+	
 	char *command = (char*)malloc(strlen(command_buf));
 	strcpy(command,command_buf);
-	command[bytes_recv] = '\0';
+	command[strlen(command_buf)] = '\0';
 	std::string temp(command);
 	std::string sh_one("\r\n");
 	std::string sh_two("\n");
@@ -206,7 +208,15 @@ int Server::serverSetUp(){
 
 	return 0;
 }
-
+std::vector<std::string> split(const std::string &s, char delim) {
+	std::stringstream ss(s);
+	std::string item;
+	std::vector<std::string> tokens;
+	while (std::getline(ss, item, delim)) {
+		tokens.push_back(item);
+	}
+	return tokens;
+}
 void Server::commandDefaultRouting(){
 
 	switch (this->commandHandling(const_cast<char*>(this->client.replyBuffer.c_str()))){
@@ -267,5 +277,93 @@ void Server::commandClose(){
 
 }
 void Server::commandUpload(){
-	
+
+	char buffer[command_buf_size];
+
+	if(this->client.replyBuffer[strlen("UPLOAD")] == ' '){
+
+		this->client.replyBuffer.erase(this->client.replyBuffer.begin(), this->client.replyBuffer.begin() + strlen("UPLOAD")+1);
+		std::vector<std::string> a = split(this->client.replyBuffer,' ');
+		if(a.size() != 2)puts("error");
+		else a[1].erase(a[1].end() - 2, a[1].end());
+
+		if(this->client.c_session.operation_status == "BAD_UPLOAD" && this->client.c_session.filename == a[0]){
+
+			itoa(this->client.c_session.reciveSize,buffer,10);
+			send(this->client.c_socket_tcp,buffer,sizeof(buffer),0);
+			this->client.c_session.operation_status = "UPLOAD";
+
+		}else {
+
+			itoa(-1,buffer,10);
+			send(this->client.c_socket_tcp,buffer,sizeof(buffer),0);
+			this->client.c_session.clear();
+			this->client.c_session.setSessionData(a[0],"UPLOAD",atoi(a[1].c_str()),-1,0);
+			this->client.replyBuffer.clear();
+
+			const int bufferSize = tcp_recv_size;
+			char buffer_rcv[bufferSize];
+			int recv_Size = -1;
+			
+			if(this->client.c_session.d_file == NULL)//если файл не открыт, значит он и не создан, создаём
+				this->client.c_session.d_file = fopen(this->client.c_session.filename.c_str(),"w+b");
+			
+			while (true){
+
+				recv_Size = recv(this->client.c_socket_tcp, buffer_rcv, sizeof(buffer_rcv), 0);
+				if(recv_Size > 0){
+					fwrite(buffer_rcv,1,recv_Size,this->client.c_session.d_file);
+					this->client.c_session.reciveSize += recv_Size;
+				}else {
+					this->client.c_session.operation_status = "BAD_UPLOAD";
+					puts("Bad connection...");
+					return;
+				}
+
+				if(this->client.c_session.reciveSize == this->client.c_session.fileSize){
+					puts("stop reciv");
+					this->client.c_session.clear();
+					this->client.replyBuffer.clear();
+					return;
+				}
+			}
+		}
+
+	}else {
+
+		send( this->client.c_socket_tcp , "Unknow command, try again" , strlen("Unknow command, try again") , 0 );
+		this->client.replyBuffer.clear();
+
+	}
+}
+
+
+void Server::reciveFileProcessing(){
+
+	const int bufferSize = 1500;
+	char buffer[bufferSize];
+	int recv_Size = -1;
+
+
+	if(this->client.c_session.d_file == NULL)//если файл не открыт, значит он и не создан, создаём
+		this->client.c_session.d_file = fopen(this->client.c_session.filename.c_str(),"w+b");
+
+	recv_Size = recv(this->client.c_socket_tcp, buffer, sizeof(buffer), 0);
+	if(recv_Size > 0){
+		fwrite(buffer,1,recv_Size,this->client.c_session.d_file);
+		this->client.c_session.reciveSize += recv_Size;
+	}else {
+		this->client.c_session.operation_status = "BAD_UPLOAD";
+		puts("Bad connection...");
+		return;
+	}
+
+	if(this->client.c_session.reciveSize == this->client.c_session.fileSize){
+		//puts("stop reciv");
+		this->client.c_session.clear();
+		this->client.replyBuffer.clear();
+
+	}
+
+
 }
