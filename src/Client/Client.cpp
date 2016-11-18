@@ -1,8 +1,5 @@
-#include "ClientWindows.h"
-#include <string>
-#include <iostream>
-#include <stdio.h>
-#include <time.h>
+#include "Client.h"
+
 
 
 
@@ -23,23 +20,34 @@ std::string currentDateTime() {
 Client::Client(char* ip_addres, int port){
 
 	this->mode = "TCP";
-
-    if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
-        printf("Failed. Error Code : %d",WSAGetLastError());
-  
-    printf("Initialised.\n");
-    
-
-    
+	
 	this->server_inf.sin_addr.s_addr = inet_addr(ip_addres);
     this->server_inf.sin_family = AF_INET;
     this->server_inf.sin_port = htons( port );
+	
+	#ifdef Windows
+	if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
+		printf("Failed. Error Code : %d",WSAGetLastError());
+	#endif
 
+    printf("Initialised.\n");
+    
+	#ifdef Windows
 	if((this->client_socket = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET)
         printf("Could not create socket : %d" , WSAGetLastError());
 
 	if((this->udp_socket = socket(AF_INET , SOCK_DGRAM , 0 )) == INVALID_SOCKET)
         printf("Could not create socket : %d" , WSAGetLastError());
+	#else
+	if((this->client_socket = socket(AF_INET , SOCK_STREAM , 0 )) == -1)
+        printf("Could not create socket");
+
+	if((this->udp_socket = socket(AF_INET , SOCK_DGRAM , 0 )) == -1)
+        printf("Could not create socket");
+
+	#endif
+
+
 	
 	printf("Socket created.\n");
 	
@@ -73,6 +81,7 @@ bool Client::reconnectToServer(){
         printf("Could not create socket : %d" , WSAGetLastError());
 		return false;
 	}
+
 	int iTimeout = 100;
 	int iRet = setsockopt( this->client_socket,
                         SOL_SOCKET,
@@ -291,7 +300,6 @@ int Client::downloadFile(char* filename){
 	fclose(file);
 	return 0;
 }
-
 int Client::uploadUdpFile(char *filename){
 	
 	FILE *file = NULL;
@@ -466,6 +474,7 @@ void Client::run(){
 		printf("\n\n%s >>", mode.c_str());
 		std::getline(std::cin,command);
 		if(command == "MODE"){
+
 			this->changeMode();
 			continue;
 		}
@@ -526,7 +535,7 @@ void Client::tcpCommandRoute(std::string command){
 						int bytesRec = 0;
 						if( send(this->client_socket, command.c_str(), strlen(command.c_str()), 0) != strlen(command.c_str()) ) 
 							perror("send failed");
-						do{
+						//do{
 							bytesRec = recv( this->client_socket , buff, 1024, 0);
 							if(bytesRec > 0){
 								buff[bytesRec] = '\0';
@@ -536,7 +545,7 @@ void Client::tcpCommandRoute(std::string command){
 								printf("Disconnect from server.");
 								is_connection = false;
 							}
-						}while(bytesRec > 0);
+						//}while(bytesRec > 0);
 					}
 		}
 }
@@ -550,9 +559,9 @@ void Client::udpCommandRoute(std::string command){
 					command.erase(command.begin(), command.begin() + strlen("UPLOAD")+1);
 					command.erase(command.end() - 2, command.end());
 					while(true){
-						if(uploadFile(const_cast<char*>(command.c_str())) == 0)break;
+						if(uploadUdpFile(const_cast<char*>(command.c_str())) == 0)break;
 						else{
-							if(reconnectTimer(10))continue;
+							if(reconnectTimer(30))continue;
 							else {
 								puts("Problems with the connection during Uploading file. Reconnect to server...");
 								reconnectionFlag = true;
@@ -569,7 +578,7 @@ void Client::udpCommandRoute(std::string command){
 					command.erase(command.end() - 2, command.end());
 
 					while(true){
-						if(downloadFile(const_cast<char*>(command.c_str())) == 0)break;
+						if(downloadUdpFile(const_cast<char*>(command.c_str())) == 0)break;
 						else{
 							if(reconnectTimer(30))continue;
 							else {
@@ -615,8 +624,14 @@ void Client::changeMode(){
 
 Client::~Client()
 {
-	closesocket(this->client_socket);
-	closesocket(this->udp_socket);
-    WSACleanup();
+	#ifdef Windows
+		closesocket(this->client_socket);
+		closesocket(this->udp_socket);
+		WSACleanup();
+	#else
+		close(this->client_socket);
+		close(this->udp_socket);
+	#endif
+
 }
 

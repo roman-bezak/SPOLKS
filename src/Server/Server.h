@@ -1,8 +1,26 @@
 #include <stdio.h>
-#include <winsock2.h>
-#include <Ws2tcpip.h>
+#include <string>
+#include <ctime>
+#include <iostream>
 #include <vector>
-#pragma comment(lib,"ws2_32.lib")
+#include <sstream>
+#include <algorithm>
+
+#ifdef __linux__ 
+	#define Unix
+#elif _WIN32
+	#define Windows
+#endif
+
+#ifdef Windows
+	#include <winsock2.h>
+	#pragma comment(lib,"ws2_32.lib")
+#else
+	#include<sys/socket.h>
+	#include<arpa/inet.h>
+#endif
+
+
 
 struct Session{
 
@@ -44,12 +62,22 @@ struct Session{
 
 struct Client{
 
+
+	#ifdef Windows
 	SOCKET c_socket;
+	#else
+	int c_socket;
+	#endif
+
 	std::string replyBuffer;
 	sockaddr_in inf;
 	Session c_session;
 
+	#ifdef Windows
 	Client(SOCKET s,sockaddr_in i){
+	#else
+	Client(int s,sockaddr_in i){
+	#endif
 		c_socket = s;
 		inf = i;
 		replyBuffer = "";
@@ -119,8 +147,14 @@ class Server
 
 	private:
 
+		#ifdef Windows
 		WSADATA wsa;
 		SOCKET server_socket, udp_server_socket, client_socket, new_clientSocket;
+		#else
+		int server_socket, udp_server_socket, client_socket, new_clientSocket;
+		#endif
+
+
 		sockaddr_in serverInf, new_clientInf;
 		std::vector<UdpSession> udp_sessions;
 		std::vector<Client> clients;
@@ -138,13 +172,13 @@ class Server
 		void uploadInit(int);
 		void uploadUdpInit(int,char*);
 		void downloadInit(int);
-		//void downloadUdpInit(int);
+		void downloadUdpInit(int,char*);
 
 		void reciveFileProcessing(int);
 		void downloadFileProcessing(int);
 
 		void reciveFileUdpProcessing(int);
-		//void downloadFileUdpProcessing(int);
+		void downloadFileUdpProcessing(int);
 
 		int checkIsUdpSession(sockaddr_in);
 		bool searchEscapeChars(char*, int, int, std::string);

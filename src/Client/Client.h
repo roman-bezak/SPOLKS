@@ -1,16 +1,36 @@
-#include<stdio.h>
-#include<winsock2.h>
-#include <string>
+#ifdef __linux__ 
+	#define Unix
+#elif _WIN32
+	#define Windows
+#endif
 
-#pragma comment(lib,"ws2_32.lib") //Winsock Library
+#include <stdio.h>
+#include <string>
+#include <iostream>
+#include <time.h>
+
+#ifdef Windows
+	#include <winsock2.h>
+	#pragma comment(lib,"ws2_32.lib")
+#else
+	#include<sys/socket.h>
+	#include<arpa/inet.h>
+#endif
+
+
 
 class Client
 {
 
 private:
-
-	WSADATA wsa;
+	
+	#ifdef Windows
 	SOCKET client_socket, udp_socket;
+	WSADATA wsa;
+	#else
+	int client_socket, udp_socket;
+	#endif
+
 	sockaddr_in server_inf;
 	bool reconnectionFlag;
 	std::string mode;

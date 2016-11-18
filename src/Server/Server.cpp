@@ -1,13 +1,9 @@
 #include "Server.h"
-#include <algorithm>
-#include <string>
-#include <Ws2tcpip.h>
-#include <iostream>
-#include <ctime>
-#include <time.h>
-#include <vector>
-#include <sstream>
 
+#define RCV_SIZE_TCP 1500
+#define RCV_SIZE_UDP 1500
+#define SEND_SIZE_TCP 1500
+#define SEND_SIZE_UDP 1500
 
 std::vector<std::string> split(const std::string &s, char delim) {
 	std::stringstream ss(s);
@@ -27,9 +23,15 @@ Server::Server(int port){
 
 Server::~Server()
 {
-	closesocket(this->server_socket);
-	closesocket(this->udp_server_socket);
-	WSACleanup();
+	#ifdef Windows
+		closesocket(this->server_socket);
+		closesocket(this->udp_server_socket);
+		WSACleanup();
+	#else
+		close(this->server_socket);
+		close(this->udp_server_socket);
+	#endif
+
 }
 
 bool Server::start(){
@@ -89,6 +91,7 @@ bool Server::start(){
 					}
 
 				}
+
 				if(!is_Old_client){
 					Client n_client(this->new_clientSocket, this->new_clientInf);
 					this->clients.push_back(n_client);
@@ -102,29 +105,34 @@ bool Server::start(){
 
 		if (FD_ISSET(this->udp_server_socket , &readfds)){
 
-			char buf[1024];
-			int len = 0;
-			int slen = sizeof(this->new_clientInf);
-			len = recvfrom(this->udp_server_socket, buf, 1024, 0, (struct sockaddr *)&this->new_clientInf, &slen);
-			buf[len] = '\0';
+			bool flag = false;
+
+			for (int i = 0; i < this->udp_sessions.size(); i++){
+
+				if(this->udp_sessions[i].operation_status == "UPLOAD"){
+					reciveFileUdpProcessing(i);
+					flag = true;
+				}
+				if(this->udp_sessions[i].operation_status == "DOWNLOAD"){
+					downloadFileUdpProcessing(i);
+					flag = true;
+				}
+			}
 			
-			//int id = -1;
-			//if( (id = this->checkIsUdpSession(this->new_clientInf)) >= 0){
-			//	
-			//	puts("est");
+			if(!flag){
 
-			//	//if(this->udp_sessions[id].operation_status == "UPLOAD")reciveFileUdpProcessing();
-			//	//	if(this->udp_sessions[id].operation_status == "DOWNLOAD")downloadFileUdpProcessing();
-			//		
-
-			//}
-			printf("%d",udp_sessions.size());
-			if(this->searchEscapeChars(buf,len,0,"UDP"))this->commandDefaultRouting(-1,buf,this->new_clientInf);
+				char buf[1024];
+				int len = 0;
+				int slen = sizeof(this->new_clientInf);
+				len = recvfrom(this->udp_server_socket, buf, 1024, 0, (struct sockaddr *)&this->new_clientInf, &slen);
+				buf[len] = '\0';
+				printf("%s",buf);
+				if(this->searchEscapeChars(buf,len,0,"UDP"))this->commandDefaultRouting(-1,buf,this->new_clientInf);
+			}
 			
 		}
 
 		for (int i = 0; i < this->clients.size(); i++) {          
-
 
 			if(this->clients[i].c_session.operation_status == "UPLOAD"){
 				reciveFileProcessing(i);
@@ -199,7 +207,7 @@ int FileExists(const char *filename)
 }
 void Server::downloadFileProcessing(int i){
 
-	const int bufferSize = 1500;
+	const int bufferSize = SEND_SIZE_TCP;
 	char buffer[bufferSize];
 	int s_size = 0;
 	int b_read = 0;
@@ -225,7 +233,7 @@ void Server::downloadFileProcessing(int i){
 }
 void Server::reciveFileProcessing(int i){
 
-	const int bufferSize = 1500;
+	const int bufferSize = RCV_SIZE_TCP;
 	char buffer[bufferSize];
 	int recv_Size = -1;
 
@@ -324,7 +332,6 @@ void Server::downloadInit(int i){
 void Server::uploadInit(int i){
 
 	char buffer[100];
-	std::cout<< this->clients[i].replyBuffer;
 	if(this->clients[i].replyBuffer[strlen("UPLOAD")] == ' '){
 
 		this->clients[i].replyBuffer.erase(this->clients[i].replyBuffer.begin(), this->clients[i].replyBuffer.begin() + strlen("UPLOAD")+1);
@@ -436,7 +443,7 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 
 			case 2://UPLOAD
 				{
-					puts("ppush Up");
+
 					int id = -1;
 					bool isOld = false;
 
@@ -444,11 +451,11 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 						if(udp_sessions[id].operation_status == "BAD_UPLOAD"){
 							this->udp_sessions[id].inf = this->new_clientInf;
 							isOld = true;
-							puts("old uplo");
 						}
 					}
 
 					if(!isOld){
+						
 						UdpSession temp(this->new_clientInf);
 						temp.operation_status = "UPLOAD";
 						this->udp_sessions.push_back(temp);
@@ -460,9 +467,9 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 
 				break;
 
-			//case 3://DOWNLOAD
-				/*{
-					puts("ppush DOw");
+			case 3://DOWNLOAD
+				{
+
 					int id = -1;
 					bool isOld = false;
 
@@ -470,7 +477,6 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 						if(udp_sessions[id].operation_status == "BAD_DOWNLOAD"){
 							this->udp_sessions[id].inf = this->new_clientInf;
 							isOld = true;
-							puts("old down");
 						}
 					}
 
@@ -478,12 +484,12 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 						UdpSession temp(this->new_clientInf);
 						temp.operation_status = "DOWNLOAD";
 						this->udp_sessions.push_back(temp);
-						this->downloadUdpInit(this->udp_sessions.size()-1);
-					}else downloadUdpInit(id);
+						this->downloadUdpInit(this->udp_sessions.size()-1,buffer);
+					}else downloadUdpInit(id,buffer);
 
 				}
 				
-				break;*/
+				break;
 
 			}//switch
 	
@@ -491,7 +497,55 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 
 }
 
+void Server::downloadUdpInit(int i, char *command){
 
+	char buffer[100];
+	int slen=sizeof(this->udp_sessions[i].inf);
+	std::string replyBuffer(command);
+
+	if(replyBuffer[strlen("DOWNLOAD")] == ' '){
+		replyBuffer.erase(replyBuffer.begin(), replyBuffer.begin() + strlen("DOWNLOAD")+1);
+		std::vector<std::string> a = split(replyBuffer,' ');
+
+		if(a.size() != 1)puts("error");
+		else a[0].erase(a[0].end() - 2, a[0].end());
+
+		if(this->udp_sessions[i].operation_status == "BAD_DOWNLOAD" && this->udp_sessions[i].filename == a[0]){
+			itoa(getFileSize(const_cast<char*>(this->udp_sessions[i].filename.c_str())),buffer,10);
+			sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+			itoa(1,buffer,10);
+			sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+			int r_b = recvfrom(this->udp_server_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&this->udp_sessions[i].inf, &slen);
+			this->udp_sessions[i].sendigSize = atoi(buffer);
+			fseek(this->udp_sessions[i].d_file, this->udp_sessions[i].sendigSize, 0);
+			this->udp_sessions[i].operation_status = "DOWNLOAD";
+		}else {
+
+			if(FileExists(a[0].c_str())){
+				itoa(getFileSize(const_cast<char*>(a[0].c_str())),buffer,10);
+				sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+				itoa(-1,buffer,10);
+				sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+				this->udp_sessions[i].setSessionData(a[0],"DOWNLOAD",getFileSize(const_cast<char*>(a[0].c_str())),0,-1);
+
+			}else {
+				itoa(0,buffer,10);
+				sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+				itoa(-2,buffer,10);
+				sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+			}
+			
+		}
+
+	}else {
+
+		sendto( this->udp_server_socket ,"Unknow command, try again", strlen("Unknow command, try again"), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+		this->udp_sessions.erase(this->udp_sessions.begin() + i);
+		
+
+	}
+
+}
 void Server::uploadUdpInit(int i,char *command){
 
 	char buffer[100];
@@ -522,15 +576,62 @@ void Server::uploadUdpInit(int i,char *command){
 
 	}else {
 
-		sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+		sendto( this->udp_server_socket ,"Unknow command, try again", strlen("Unknow command, try again"), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+		this->udp_sessions.erase(this->udp_sessions.begin() + i);
 
 	}
 }
 
 void Server::reciveFileUdpProcessing(int i){
 
-}
+	const int bufferSize = RCV_SIZE_UDP;
+	char buffer[bufferSize];
+	int recv_Size = -1;
+	int slen = sizeof(this->udp_sessions[i].inf);
 
+
+	if(this->clients[i].c_session.d_file == NULL)//если файл не открыт, значит он и не создан, создаём
+		this->clients[i].c_session.d_file = fopen(this->clients[i].c_session.filename.c_str(),"w+b");
+
+	recv_Size = recvfrom(this->udp_server_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&this->udp_sessions[i].inf, &slen);
+	if(recv_Size > 0){
+		fwrite(buffer,1,recv_Size,this->udp_sessions[i].d_file);
+		this->udp_sessions[i].reciveSize += recv_Size;
+	}else {
+		this->udp_sessions[i].operation_status = "BAD_UPLOAD";
+		puts("Bad connection...u");
+		return;
+	}
+
+	if(this->udp_sessions[i].reciveSize == this->udp_sessions[i].fileSize){
+		this->udp_sessions[i].clear();
+	}
+}
+void Server::downloadFileUdpProcessing(int i){
+
+	const int bufferSize = SEND_SIZE_UDP;
+	char buffer[bufferSize];
+	int s_size = 0;
+	int b_read = 0;
+	int recv_Size = -1;
+	int slen = sizeof(this->udp_sessions[i].inf);
+
+	if(this->udp_sessions[i].d_file == NULL)//если файл не открыт, открываем
+		this->udp_sessions[i].d_file = fopen(this->udp_sessions[i].filename.c_str(),"r+b");
+
+	if(this->udp_sessions[i].sendigSize < this->udp_sessions[i].fileSize){
+		b_read = fread(buffer,1,sizeof(buffer),this->udp_sessions[i].d_file);
+		s_size = sendto( this->udp_server_socket ,buffer, b_read, 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+		if (s_size < 0) {
+			this->udp_sessions[i].operation_status = "BAD_DOWNLOAD";
+			puts("Bad connection...");
+			return;
+		}else this->udp_sessions[i].sendigSize += s_size;		
+	}else {
+		this->udp_sessions[i].clear();
+	}	
+
+}
 bool Server::searchEscapeChars(char *command_buf, int _bytes_recv, int client_id, std::string mode){
 	
 	bool issetEndOfCommand = false;
@@ -585,7 +686,9 @@ bool Server::searchEscapeChars(char *command_buf, int _bytes_recv, int client_id
 }
 void Server::serverSetUp(){
 
-	if (WSAStartup(MAKEWORD(2,2),&wsa) != 0){
+
+
+		if (WSAStartup(MAKEWORD(2,2),&wsa) != 0){
 		printf("Failed. Error Code : %d",WSAGetLastError());
 		exit(EXIT_FAILURE);
 	}
@@ -625,5 +728,56 @@ void Server::serverSetUp(){
 	listen(this->server_socket , 10);
 	puts("Waiting for incoming connections...");
 	puts("===================================");
+
+
+
+	//this->serverInf.sin_family = AF_INET;
+	//this->serverInf.sin_addr.s_addr = INADDR_ANY;
+	//this->serverInf.sin_port = htons( this->port );
+
+	//printf("Initialised\n");
+
+	//#ifdef Windows
+	//	if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
+	//		printf("Failed. Error Code : %d",WSAGetLastError());
+	//#endif
+
+
+	//#ifdef Windows
+	//	if((this->server_socket = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET)
+	//		printf("Could not create socket : %d" , WSAGetLastError());
+	//#else
+	//	if((this->server_socket = socket(AF_INET , SOCK_STREAM , 0 )) == -1)
+	//		printf("Could not create socket");
+	//#endif
+
+	//#ifdef Windows
+
+	//	if((this->udp_server_socket = socket(AF_INET , SOCK_DGRAM , 0 )) == INVALID_SOCKET){
+	//		printf("Could not create socket : %d" , WSAGetLastError());
+	//		exit(EXIT_FAILURE);
+	//	}
+	//#else
+
+	//	if((this->udp_server_socket = socket(AF_INET , SOCK_DGRAM , 0 )) == -1){
+	//		printf("Could not create socket");
+	//	}
+
+	//#endif
+
+	//printf("Socket created\n");
+
+	//#ifdef Windows
+	//	if( bind(this->server_socket ,(struct sockaddr *)&this->serverInf , sizeof(this->serverInf)) == SOCKET_ERROR)
+	//		printf("Bind failed with error code : %d" , WSAGetLastError());
+	//#else
+	//	if( bind(this->server_socket,(struct sockaddr *)&this->serverInf , sizeof(this->serverInf)) < 0)
+	//		printf("bind failed");
+	//#endif
+
+	//puts("Bind done");
+	//listen(this->server_socket , 100);
+	//puts("Waiting for incoming connections...");
+	//puts("===================================");
 
 }

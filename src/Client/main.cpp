@@ -1,7 +1,7 @@
 #include<stdio.h>
 #include<winsock2.h>
 #include <iostream>
-#include "ClientWindows.h"
+#include "Client.h"
 #pragma comment(lib, "ws2_32.lib")
  
 int main(int argc , char *argv[])
