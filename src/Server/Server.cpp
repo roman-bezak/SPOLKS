@@ -108,18 +108,17 @@ bool Server::start(){
 			len = recvfrom(this->udp_server_socket, buf, 1024, 0, (struct sockaddr *)&this->new_clientInf, &slen);
 			buf[len] = '\0';
 			
-			int id = -1;
-			if( (id = this->checkIsUdpSession(this->new_clientInf)) >= 0){
-				
-				puts("est");
+			//int id = -1;
+			//if( (id = this->checkIsUdpSession(this->new_clientInf)) >= 0){
+			//	
+			//	puts("est");
 
-				if(this->udp_sessions[id].operation_status == "UPLOAD"){
-				//if(this->udp_sessions[id].operation_status == "DOWNLOAD")
-				}
-					
+			//	//if(this->udp_sessions[id].operation_status == "UPLOAD")reciveFileUdpProcessing();
+			//	//	if(this->udp_sessions[id].operation_status == "DOWNLOAD")downloadFileUdpProcessing();
+			//		
 
-			}
-
+			//}
+			printf("%d",udp_sessions.size());
 			if(this->searchEscapeChars(buf,len,0,"UDP"))this->commandDefaultRouting(-1,buf,this->new_clientInf);
 			
 		}
@@ -183,7 +182,6 @@ int Server::checkIsUdpSession(sockaddr_in inf){
 
 	return -1;
 }
-
 int getFileSize(char *filename){
 
 	FILE *file = fopen(filename,"r");
@@ -438,24 +436,54 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 
 			case 2://UPLOAD
 				{
-					puts("ppush");
-					if(
-					UdpSession temp(this->new_clientInf);
-					this->udp_sessions.push_back(temp);				
-					//uploadUdpInit(i);
+					puts("ppush Up");
+					int id = -1;
+					bool isOld = false;
+
+					if( (id = this->checkIsUdpSession(this->new_clientInf)) >= 0 ){
+						if(udp_sessions[id].operation_status == "BAD_UPLOAD"){
+							this->udp_sessions[id].inf = this->new_clientInf;
+							isOld = true;
+							puts("old uplo");
+						}
+					}
+
+					if(!isOld){
+						UdpSession temp(this->new_clientInf);
+						temp.operation_status = "UPLOAD";
+						this->udp_sessions.push_back(temp);
+						this->uploadUdpInit(this->udp_sessions.size()-1,buffer);
+					}else uploadUdpInit(id,buffer);
+
+					
 				}
 
 				break;
 
-			case 3://DOWNLOAD
-				{
-					puts("ppush");
-					UdpSession temp(this->new_clientInf);
-					this->udp_sessions.push_back(temp);
-					//downloadUdpInit(i);
+			//case 3://DOWNLOAD
+				/*{
+					puts("ppush DOw");
+					int id = -1;
+					bool isOld = false;
+
+					if( (id = this->checkIsUdpSession(this->new_clientInf)) >= 0 ){
+						if(udp_sessions[id].operation_status == "BAD_DOWNLOAD"){
+							this->udp_sessions[id].inf = this->new_clientInf;
+							isOld = true;
+							puts("old down");
+						}
+					}
+
+					if(!isOld){
+						UdpSession temp(this->new_clientInf);
+						temp.operation_status = "DOWNLOAD";
+						this->udp_sessions.push_back(temp);
+						this->downloadUdpInit(this->udp_sessions.size()-1);
+					}else downloadUdpInit(id);
+
 				}
 				
-				break;
+				break;*/
 
 			}//switch
 	
@@ -463,9 +491,46 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 
 }
 
-//void Server::uploadUdpInit(char* buffer){
-//
-//}
+
+void Server::uploadUdpInit(int i,char *command){
+
+	char buffer[100];
+	int slen=sizeof(this->udp_sessions[i].inf);
+
+	std::string replyBuffer(command);
+
+	if(replyBuffer[strlen("UPLOAD")] == ' '){
+
+		replyBuffer.erase(replyBuffer.begin(), replyBuffer.begin() + strlen("UPLOAD")+1);
+		std::vector<std::string> a = split(replyBuffer,' ');
+		if(a.size() != 2)puts("error");
+		else a[1].erase(a[1].end() - 2, a[1].end());
+
+		if(udp_sessions[i].operation_status == "BAD_UPLOAD" && udp_sessions[i].filename == a[0]){
+
+			itoa(udp_sessions[i].reciveSize,buffer,10);
+			sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+			udp_sessions[i].operation_status = "UPLOAD";
+
+		}else {
+
+			itoa(-1,buffer,10);
+			sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+			udp_sessions[i].clear();
+			udp_sessions[i].setSessionData(a[0],"UPLOAD",atoi(a[1].c_str()),-1,0);
+		}
+
+	}else {
+
+		sendto( this->udp_server_socket ,buffer, sizeof(buffer), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+
+	}
+}
+
+void Server::reciveFileUdpProcessing(int i){
+
+}
+
 bool Server::searchEscapeChars(char *command_buf, int _bytes_recv, int client_id, std::string mode){
 	
 	bool issetEndOfCommand = false;

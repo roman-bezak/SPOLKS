@@ -136,14 +136,14 @@ class Server
 		void commandDefaultRouting(int,char*,sockaddr_in);
 
 		void uploadInit(int);
-		//void uploadUdpInit(int);
+		void uploadUdpInit(int,char*);
 		void downloadInit(int);
 		//void downloadUdpInit(int);
 
 		void reciveFileProcessing(int);
 		void downloadFileProcessing(int);
 
-		//void reciveFileUdpProcessing(int);
+		void reciveFileUdpProcessing(int);
 		//void downloadFileUdpProcessing(int);
 
 		int checkIsUdpSession(sockaddr_in);
