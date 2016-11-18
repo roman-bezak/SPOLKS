@@ -23,6 +23,8 @@ public:
 	int getFileSize(FILE*);
 	int uploadFile(char*);
 	int downloadFile(char*);
+	int downloadUdpFile(char*);
+	int uploadUdpFile(char*);
 	int commandHandling(char*);
 	bool reconnectToServer();
 	int reconnectTimer(int);

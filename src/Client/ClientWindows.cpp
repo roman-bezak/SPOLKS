@@ -291,6 +291,157 @@ int Client::downloadFile(char* filename){
 	fclose(file);
 	return 0;
 }
+
+int Client::uploadUdpFile(char *filename){
+	
+	FILE *file = NULL;
+
+	try{
+	   file = safe_fopen(filename,"r+b");
+	}catch(...){
+	   std::cout << "Open file ERROR.";
+	   return 0;
+	}
+
+	int slen = sizeof(this->server_inf);
+	const int buffer_size = 1024;
+    char buffer[buffer_size];
+	char buf[100];
+	long long int file_size = getFileSize(file);
+    long long int total_bytes_s = 0;
+	int s_bytes = 0;
+	int r_bytes = 0;
+    size_t bytes_read = 0;
+	clock_t start, end = 0;
+	bool needClaculatedSpeed = true;
+
+	sprintf(buffer, "UPLOAD %s %llu\r\n", filename, file_size);
+
+	s_bytes = sendto( this->udp_socket , buffer, sizeof(buffer), 0, (struct sockaddr *) &this->server_inf, slen );
+
+	if (s_bytes < 0) {
+		fclose(file);
+		return 1;
+	
+	}else{
+
+		r_bytes = recvfrom(this->udp_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&this->server_inf, &slen);
+		if(r_bytes > 0){
+			if(atoi(buf) > -1){
+				total_bytes_s = atoi(buf);
+				fseek(file,atoi(buf),0);
+
+			}
+		}else return 1;
+	}
+		
+		puts("Start upload...");
+
+		if(total_bytes_s)needClaculatedSpeed = false;
+		start = clock();
+		while (total_bytes_s < file_size){
+
+			bytes_read = fread(buffer, 1, sizeof(buffer), file);
+			s_bytes = sendto( this->udp_socket , buffer, bytes_read, 0, (struct sockaddr *) &this->server_inf, slen );
+			if (s_bytes < 0) {
+				fclose(file);
+				return 1;
+			}
+			total_bytes_s += s_bytes;
+			
+		}
+		end = clock();
+
+		double ellapsed = double(end - start)/1000;
+		double speed = 0;
+		if(total_bytes_s)
+			speed = (double)total_bytes_s/ellapsed;
+		if(needClaculatedSpeed)
+			printf("File (%s), was upload, total bytes send: %llu \nEllaspsed time(in seconds): %f \nSpeed mb/s: %f",filename,total_bytes_s, ellapsed, speed/1024/1024);
+		else printf("File (%s), was upload, total bytes send: %llu",filename,total_bytes_s);
+
+	fclose(file);
+	return 0;
+}
+int Client::downloadUdpFile(char * filename){
+
+		//sendto( this->udp_server_socket ,"Unknow command, try again", strlen("Unknow command, try again"), 0, (struct sockaddr *) &this->udp_sessions[i].inf, slen );
+	//recv_Size = recvfrom(this->udp_server_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&this->udp_sessions[i].inf, &slen);
+
+	FILE *file = NULL;
+	try{
+	   file = safe_fopen(filename,"a+b");
+	}catch(...){
+	   std::cout << "Open file ERROR.";
+	   return 0;
+	}
+
+	const int buffer_size = 1024;
+    char buffer[buffer_size];
+	char buf[100];
+    long long int total_bytes_reciv = 0;
+	long long int file_size = 0;
+	int s_bytes = 0;
+	int r_bytes = 0;
+    size_t bytes_read = 0;
+	clock_t start, end = 0;
+	bool needClaculatedSpeed = true;
+	int slen = sizeof(this->udp_socket);
+
+	sprintf(buffer, "DOWNLOAD %s\r\n", filename);
+	s_bytes = sendto( this->udp_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &this->server_inf, slen );
+	if (s_bytes < 0) {
+		fclose(file);
+		return 1;
+
+	}else{
+		r_bytes = recvfrom(this->udp_socket, buf, sizeof(buf), 0, (struct sockaddr *)&this->server_inf, &slen);
+		file_size = atoi(buf);
+		r_bytes = recvfrom(this->udp_socket, buf, sizeof(buf), 0, (struct sockaddr *)&this->server_inf, &slen);
+		if(r_bytes > 0){
+			if(atoi(buf) == -1){
+				total_bytes_reciv = 0;
+			}else if(atoi(buf) == -2) {
+				puts("File not found");
+				fclose(file);
+				remove(filename);
+				return 0;
+			}else {
+				itoa(getFileSize(file),buf,10);
+				total_bytes_reciv = getFileSize(file);
+				sendto( this->udp_socket, buf, sizeof(buf), 0, (struct sockaddr *) &this->server_inf, slen );
+			}
+		}else {
+			fclose(file);
+			return 1;
+		}
+	}
+
+	puts("Start download...");
+
+	if(total_bytes_reciv)needClaculatedSpeed = false;
+	start = clock();
+
+	while( (r_bytes =  recvfrom(this->udp_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&this->server_inf, &slen)) > 0){
+		fwrite(buffer,1,r_bytes,file);
+		total_bytes_reciv += r_bytes;
+	}
+
+	end = clock();
+	if(getFileSize(file) != file_size)return 1;
+
+	double ellapsed = double(end - start)/1000;
+	double speed = 0;
+	if(total_bytes_reciv)
+		speed = (double)total_bytes_reciv/ellapsed;
+	if(needClaculatedSpeed)
+		printf("File (%s), was download, total bytes recive: %llu \nEllaspsed time(in seconds): %f \nSpeed mb/s: %f",filename,total_bytes_reciv, ellapsed, speed/1024/1024);
+	else printf("File (%s), was download, total bytes recive: %llu",filename,total_bytes_reciv);
+
+	fclose(file);
+	return 0;
+
+}
 void Client::run(){
 	
 
@@ -339,7 +490,7 @@ void Client::tcpCommandRoute(std::string command){
 					while(true){
 						if(uploadFile(const_cast<char*>(command.c_str())) == 0)break;
 						else{
-							if(reconnectTimer(10))continue;
+							if(reconnectTimer(30))continue;
 							else {
 								puts("Problems with the connection during Uploading file. Reconnect to server...");
 								reconnectionFlag = true;
@@ -390,7 +541,6 @@ void Client::tcpCommandRoute(std::string command){
 		}
 }
 
-
 void Client::udpCommandRoute(std::string command){
 
 		switch (this->commandHandling(const_cast<char*>(command.c_str()))){
@@ -417,6 +567,7 @@ void Client::udpCommandRoute(std::string command){
 				if(command[strlen("DOWNLOAD")] == ' '){
 					command.erase(command.begin(), command.begin() + strlen("DOWNLOAD")+1);
 					command.erase(command.end() - 2, command.end());
+
 					while(true){
 						if(downloadFile(const_cast<char*>(command.c_str())) == 0)break;
 						else{
@@ -439,7 +590,7 @@ void Client::udpCommandRoute(std::string command){
 						int slen = sizeof(this->server_inf);
 						if( sendto(this->udp_socket, command.c_str(), strlen(command.c_str()), 0,(struct sockaddr *)&this->server_inf, slen ) != strlen(command.c_str()) ) 
 							perror("send failed");
-						//do{
+
 							bytesRec = recvfrom(this->udp_socket, buff, 1024, 0, (struct sockaddr *)&this->server_inf, &slen);
 
 							if(bytesRec > 0){
@@ -450,7 +601,7 @@ void Client::udpCommandRoute(std::string command){
 								printf("Disconnect from server.");
 								is_connection = false;
 							}
-						//}while(bytesRec > 0);
+
 					}
 		}
 }
