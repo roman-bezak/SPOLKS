@@ -63,7 +63,56 @@ struct Client{
 
 };
 
+struct UdpSession{
 
+
+	FILE *d_file;
+	std::string filename;
+	std::string operation_status;
+	sockaddr_in inf;
+	int reciveSize;
+	int sendigSize;
+	int fileSize;
+
+	UdpSession(){
+		d_file = NULL;
+		operation_status = "DEFAULT";
+		filename = " ";
+		reciveSize = -1;
+		sendigSize = -1;
+		fileSize = -1;
+	}
+
+	UdpSession(sockaddr_in _inf){
+		inf = _inf;
+		d_file = NULL;
+		operation_status = "DEFAULT";
+		filename = " ";
+		reciveSize = -1;
+		sendigSize = -1;
+		fileSize = -1;
+	}
+
+	void clear(){
+		if(d_file != NULL){
+			fclose(d_file);
+			d_file = NULL;
+		}
+		operation_status = "DEFAULT";
+		reciveSize = -1;
+		sendigSize = -1;
+		fileSize = -1;
+		filename = " ";
+	}
+
+	void setSessionData(std::string file_name,std::string o_s, int file_size, int sending_size, int recive_size){
+		filename = file_name;
+		operation_status = o_s;
+		fileSize = file_size;
+		sendigSize = sending_size;
+		reciveSize = recive_size;
+	}
+};
 
 class Server
 {
@@ -73,7 +122,7 @@ class Server
 		WSADATA wsa;
 		SOCKET server_socket, udp_server_socket, client_socket, new_clientSocket;
 		sockaddr_in serverInf, new_clientInf;
-		std::vector<Session> udp_sessions;
+		std::vector<UdpSession> udp_sessions;
 		std::vector<Client> clients;
 		int port;
 		
@@ -82,13 +131,22 @@ class Server
 		Server(int);
 		bool start();
 		int commandHandling(char*);
-		bool HasConnectionDropped(SOCKET);
 		std::string currentDateTime();
-		void reciveFileProcessing(int);
+
 		void commandDefaultRouting(int,char*,sockaddr_in);
+
 		void uploadInit(int);
+		//void uploadUdpInit(int);
 		void downloadInit(int);
+		//void downloadUdpInit(int);
+
+		void reciveFileProcessing(int);
 		void downloadFileProcessing(int);
+
+		//void reciveFileUdpProcessing(int);
+		//void downloadFileUdpProcessing(int);
+
+		int checkIsUdpSession(sockaddr_in);
 		bool searchEscapeChars(char*, int, int, std::string);
 		void serverSetUp();
 

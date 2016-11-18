@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <iostream>
-#include "CheckOS.h"
+#include "Server.h"
 
 int main(int argc , char *argv[])
 {

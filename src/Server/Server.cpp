@@ -1,4 +1,4 @@
-#include "ServerWindows.h"
+#include "Server.h"
 #include <algorithm>
 #include <string>
 #include <Ws2tcpip.h>
@@ -107,8 +107,21 @@ bool Server::start(){
 			int slen = sizeof(this->new_clientInf);
 			len = recvfrom(this->udp_server_socket, buf, 1024, 0, (struct sockaddr *)&this->new_clientInf, &slen);
 			buf[len] = '\0';
-			if(this->searchEscapeChars(buf,len,0,"UDP"))this->commandDefaultRouting(-1,buf,this->new_clientInf);
+			
+			int id = -1;
+			if( (id = this->checkIsUdpSession(this->new_clientInf)) >= 0){
+				
+				puts("est");
 
+				if(this->udp_sessions[id].operation_status == "UPLOAD"){
+				//if(this->udp_sessions[id].operation_status == "DOWNLOAD")
+				}
+					
+
+			}
+
+			if(this->searchEscapeChars(buf,len,0,"UDP"))this->commandDefaultRouting(-1,buf,this->new_clientInf);
+			
 		}
 
 		for (int i = 0; i < this->clients.size(); i++) {          
@@ -160,6 +173,15 @@ bool Server::start(){
 	}//main while(true)
 
 	return true;
+}
+
+int Server::checkIsUdpSession(sockaddr_in inf){
+
+	for (int i = 0; i < this->udp_sessions.size(); i++){
+		if( inet_ntoa(udp_sessions[i].inf.sin_addr) == inet_ntoa(inf.sin_addr) )return i;
+	}
+
+	return -1;
 }
 
 int getFileSize(char *filename){
@@ -414,19 +436,36 @@ void Server::commandDefaultRouting(int i, char *buffer, sockaddr_in addr){
 				sendto( this->udp_server_socket , currentDateTime().c_str() , strlen(currentDateTime().c_str()) , 0, (struct sockaddr *) &addr, slen );
 				break;
 
-			//case 2://UPLOAD
-			//	uploadInit(i);
-			//	break;
+			case 2://UPLOAD
+				{
+					puts("ppush");
+					if(
+					UdpSession temp(this->new_clientInf);
+					this->udp_sessions.push_back(temp);				
+					//uploadUdpInit(i);
+				}
 
-			//case 3://DOWNLOAD
-			//	downloadInit(i);
-			//	break;
+				break;
+
+			case 3://DOWNLOAD
+				{
+					puts("ppush");
+					UdpSession temp(this->new_clientInf);
+					this->udp_sessions.push_back(temp);
+					//downloadUdpInit(i);
+				}
+				
+				break;
 
 			}//switch
 	
 	}
 
 }
+
+//void Server::uploadUdpInit(char* buffer){
+//
+//}
 bool Server::searchEscapeChars(char *command_buf, int _bytes_recv, int client_id, std::string mode){
 	
 	bool issetEndOfCommand = false;
